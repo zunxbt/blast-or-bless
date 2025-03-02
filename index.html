@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blast or Bless Game</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" type="application/javascript"></script>
+  <style>
+    :root {
+      --primary: #1a1a1a;
+      --secondary: #FFD700;
+      --danger: #FF4444;
+      --success: #00C851;
+      --heaven: #ffffff;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #8C016C, #FE11C5);
+      color: white;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    #wallet-info {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: white;
+      font-size: 0.7em;
+      background: rgba(0,0,0,0.4);
+      padding: 5px 10px;
+      border-radius: 5px;
+      text-align: right;
+      min-width: 100px;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+    }
+    #stats {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-bottom: 30px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .stat-box {
+      background: rgba(0,0,0,0.4);
+      padding: 15px 30px;
+      border-radius: 10px;
+      text-align: center;
+      min-width: 140px;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .lives-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .life {
+      width: 40px;
+      height: 40px;
+      background: url('life.png') no-repeat center;
+      background-size: contain;
+      opacity: 1;
+      filter: drop-shadow(0 0 5px var(--danger));
+    }
+    .centered-container {
+      display: flex;
+      justify-content: center;
+    }
+    #game-container {
+      display: grid;
+      grid-template-columns: repeat(3, 110px);
+      gap: 20px;
+      margin: 40px 0;
+      perspective: 1000px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 20px;
+      border-radius: 15px;
+    }
+    .box {
+      width: 110px;
+      height: 110px;
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    .box:not(.revealed):hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 15px var(--secondary);
+    }
+    .flipper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.6s;
+    }
+    .front, .back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.5em;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .front {
+      background: linear-gradient(45deg, var(--primary), #2a2a2a);
+      color: var(--secondary);
+    }
+    .back {
+      background: linear-gradient(45deg, var(--primary), #2a2a2a);
+      transform: rotateY(180deg);
+    }
+    .box.revealed .flipper {
+      transform: rotateY(180deg);
+    }
+    .back.bomb .bomb-content {
+      animation: explode 0.8s ease-out;
+    }
+    .back.star .star-content {
+      animation: starPop 0.6s ease-out;
+    }
+    @keyframes explode {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.5) rotate(45deg); }
+      40% { transform: scale(0.8) rotate(-45deg); }
+      60% { transform: scale(1.2) rotate(0deg); }
+      80% { transform: scale(0.5) rotate(180deg); opacity: 0.5; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+    @keyframes starPop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2) rotate(15deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+    button {
+      background: linear-gradient(90deg, var(--secondary), #ffcc00);
+      color: var(--primary);
+      border: none;
+      padding: 15px 30px;
+      border-radius: 30px;
+      font-family: 'Poppins', sans-serif;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 215, 0, 0.5);
+    }
+    #button-container {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .game-over, #rules-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 999;
+    }
+    .game-over.show, #rules-modal.show {
+      display: flex;
+    }
+    #rules-modal {
+      background: rgb(0, 0, 0);
+      border: 2px solid var(--secondary);
+      padding: 30px;
+      border-radius: 15px;
+      width: 500px;
+      height: 500px;
+      max-width: 600px;
+      margin: auto;
+      text-align: center;
+      transform-origin: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    #rules-modal h1 {
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 2em;
+      margin-bottom: 20px;
+      color: var(--secondary);
+    }
+    #rules-modal ul {
+      list-style: none;
+      padding: 0 20px;
+      font-size: 1em;
+      line-height: 1.2;
+      text-align: left;
+      flex-grow: 1;
+    }
+    #rules-modal li {
+      margin: 5px 0;
+    }
+    #rules-modal button {
+      margin-top: 20px;
+    }
+    #stars {
+      font-size: 1.8em;
+      transition: all 0.3s;
+    }
+    #stars.increase {
+      color: #00ff00;
+      animation: pulse 0.5s;
+    }
+    #stars.decrease {
+      color: #ff0000;
+      animation: pulse 0.5s;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    #refill-message {
+      font-size: 1.2em;
+      margin: 20px 0;
+      color: var(--secondary);
+    }
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #loading.show {
+      display: flex;
+    }
+    #loading p {
+      font-size: 1.5em;
+      color: white;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="wallet-info" style="display: none;">
+    <div id="wallet-address">Not connected</div>
+    <div id="wallet-balance">Balance: 0 ETH</div>
+  </div>
+  <div id="game-interface" style="display: none; position: relative; z-index: 1;">
+    <div id="stats">
+      <div class="stat-box">
+        <h3>Stars</h3>
+        <div id="stars">0</div>
+      </div>
+      <div class="stat-box">
+        <h3>Lives</h3>
+        <div class="lives-container" id="lives-container"></div>
+      </div>
+    </div>
+    <div class="centered-container">
+      <div id="game-container"></div>
+    </div>
+    <div id="button-container">
+      <button id="sacrifice-btn">Sacrifice Life for 5★</button>
+      <button id="cash-out-btn">Cash Out</button>
+    </div>
+  </div>
+  <div class="game-over" id="game-over">
+    <h1 id="game-over-title">Game Over!</h1>
+    <button id="play-again-btn">Play Again</button>
+    <button id="buy-lives-btn">Buy 5 Lives for 0.0005 ETH</button>
+  </div>
+  <div id="rules-modal" class="show" style="z-index: 1000;">
+    <h1>"Blast or Bless" Game Rules</h1>
+    <ul>
+      <li>▫️ Connect wallet with at least 0.1 Sepolia ETH</li>
+      <li>▫️ Buy 5 lives for 0.0005 Sepolia ETH</li>
+      <li>▫️ Click boxes (cost 1 star) to find stars or bombs</li>
+      <li>▫️ Stars: Gain 1-10 stars randomly</li>
+      <li>▫️ Bombs: Lose a life and cycle stars</li>
+      <li>▫️ Reveal 7 safe boxes for 10 bonus stars and reset</li>
+      <li>▫️ Sacrifice a life for 5 stars</li>
+      <li>▫️ Cash out anytime to save your stars</li>
+      <li>▫️ Maintain at least 0.1 ETH balance to play</li>
+    </ul>
+    <button id="start-game-btn">Start Game</button>
+  </div>
+  <div id="loading">
+    <p>Processing transaction...</p>
+  </div>
+  <audio id="bomb-sound" src="https://www.myinstants.com/media/sounds/explosion.mp3"></audio>
+  <audio id="star-sound" src="https://www.myinstants.com/media/sounds/coin.mp3"></audio>
+
+  <script>
+    if (/Android|iPhone/i.test(navigator.userAgent)) {
+      document.body.innerHTML = '<h1 style="color: white; text-align: center; font-family: \'Poppins\', sans-serif;">This game is only available on PC.</h1>';
+    } else {
+      let provider;
+      let signer;
+      let walletAddress;
+      let contract;
+      let stars = 0;
+      let lives = 0;
+      let cycleStars = 0;
+      let gameActive = false;
+      let bombPositions = [];
+      let revealedCount = 0;
+      let hasUnsavedChanges = false;
+      let isProcessing = false;
+
+      // Contract details
+      const contractAddress = "0x11d16113312A19639E5e32ee435e8f6776cc8329";
+      const contractABI = [
+        {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":false,"internalType":"uint256","name":"lives","type":"uint256"}],"name":"LivesPurchased","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":false,"internalType":"uint256","name":"lives","type":"uint256"}],"name":"LivesUpdated","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":false,"internalType":"uint256","name":"stars","type":"uint256"}],"name":"StarsUpdated","type":"event"},
+        {"inputs":[],"name":"buyLives","outputs":[],"stateMutability":"payable","type":"function"},
+        {"inputs":[{"internalType":"uint256","name":"newStars","type":"uint256"},{"internalType":"uint256","name":"newLives","type":"uint256"}],"name":"endGame","outputs":[],"stateMutability":"nonpayable","type":"function"},
+        {"inputs":[{"internalType":"address","name":"player","type":"address"}],"name":"getPlayer","outputs":[{"internalType":"uint256","name":"stars","type":"uint256"},{"internalType":"uint256","name":"lives","type":"uint256"}],"stateMutability":"view","type":"function"},
+        {"inputs":[],"name":"lifeCost","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+        {"inputs":[],"name":"livesPerPurchase","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+        {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+        {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"players","outputs":[{"internalType":"uint256","name":"stars","type":"uint256"},{"internalType":"uint256","name":"lives","type":"uint256"}],"stateMutability":"view","type":"function"},
+        {"inputs":[{"internalType":"address","name":"player","type":"address"},{"internalType":"uint256","name":"newLives","type":"uint256"}],"name":"updateLives","outputs":[],"stateMutability":"nonpayable","type":"function"},
+        {"inputs":[{"internalType":"address","name":"player","type":"address"},{"internalType":"uint256","name":"newStars","type":"uint256"}],"name":"updateStars","outputs":[],"stateMutability":"nonpayable","type":"function"},
+        {"inputs":[],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"}
+      ];
+
+      var defaults = {
+        spread: 360,
+        ticks: 50,
+        gravity: 0,
+        decay: 0.94,
+        startVelocity: 30,
+        colors: ['FFE400', 'FFBD00', 'E89400', 'FFCA6C', 'FDFFB8']
+      };
+
+      function shoot(origin) {
+        confetti({
+          ...defaults,
+          particleCount: 40,
+          scalar: 1.2,
+          shapes: ['star'],
+          origin: origin
+        });
+        confetti({
+          ...defaults,
+          particleCount: 10,
+          scalar: 0.75,
+          shapes: ['circle'],
+          origin: origin
+        });
+      }
+
+      function createCelebration(origin) {
+        setTimeout(() => shoot(origin), 0);
+        setTimeout(() => shoot(origin), 100);
+        setTimeout(() => shoot(origin), 200);
+      }
+
+      async function connectWallet() {
+        if (window.ethereum) {
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          signer = provider.getSigner();
+          walletAddress = await signer.getAddress();
+          contract = new ethers.Contract(contractAddress, contractABI, signer);
+          const network = await provider.getNetwork();
+          if (network.chainId !== 11155111) {
+            try {
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0xAA36A7' }],
+              });
+            } catch (switchError) {
+              if (switchError.code === 4902) {
+                alert("Sepolia network is not added to your MetaMask. Please add it manually.");
+              } else {
+                alert("Failed to switch to Sepolia network.");
+              }
+              return false;
+            }
+          }
+          document.getElementById('wallet-address').textContent = `Addr: ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
+          await updateBalance();
+          document.getElementById('wallet-info').style.display = 'block';
+          return true;
+        } else {
+          alert("Please install MetaMask!");
+          return false;
+        }
+      }
+
+      function disconnectWallet() {
+        provider = null;
+        signer = null;
+        walletAddress = null;
+        contract = null;
+        document.getElementById('wallet-address').textContent = 'Not connected';
+        document.getElementById('wallet-balance').textContent = 'Balance: 0 ETH';
+        document.getElementById('wallet-info').style.display = 'none';
+        document.getElementById('game-interface').style.display = 'none';
+        document.getElementById('rules-modal').style.display = 'flex';
+        gameActive = false;
+      }
+
+      async function updateBalance() {
+        if (provider && walletAddress) {
+          const balance = await provider.getBalance(walletAddress);
+          const balanceInEth = ethers.utils.formatEther(balance);
+          document.getElementById('wallet-balance').textContent = `Bal: ${parseFloat(balanceInEth).toFixed(4)} ETH`;
+          return parseFloat(balanceInEth);
+        }
+        return 0;
+      }
+
+      async function checkBalance(action = 'play') {
+        const balance = await updateBalance();
+        if (balance < 0.1) {
+          alert(`Your balance is less than 0.1 ETH (${balance.toFixed(4)} ETH). Please top up to ${action === 'start' ? 'start the game' : 'continue playing'}.`);
+          return false;
+        }
+        return true;
+      }
+
+      async function buyLives() {
+        if (!contract) {
+          alert("Please connect your wallet first.");
+          return;
+        }
+        if (lives > 0) {
+          alert("You can only buy lives when you have none left!");
+          return;
+        }
+        const hasEnoughBalance = await checkBalance('buy lives');
+        if (!hasEnoughBalance) return;
+        try {
+          isProcessing = true;
+          document.getElementById('loading').classList.add('show');
+          const tx = await contract.buyLives({ value: ethers.utils.parseEther("0.0005") });
+          await tx.wait();
+          await loadUserData();
+          alert("Successfully bought 5 lives!");
+          document.getElementById('game-over').classList.remove('show');
+          initializeGame();
+        } catch (error) {
+          console.error(error);
+          alert("Failed to buy lives. Ensure you have enough Sepolia ETH for the purchase and gas fees.");
+        } finally {
+          isProcessing = false;
+          document.getElementById('loading').classList.remove('show');
+        }
+      }
+
+      async function loadUserData() {
+        if (contract && walletAddress) {
+          const player = await contract.getPlayer(walletAddress);
+          stars = Number(player.stars);
+          lives = Number(player.lives);
+          updateStarsDisplay(stars);
+          renderLives();
+          hasUnsavedChanges = false;
+        }
+      }
+
+      function updateStarsDisplay(newValue) {
+        const starsElem = document.getElementById('stars');
+        starsElem.textContent = newValue;
+      }
+
+      function renderLives() {
+        const livesContainer = document.getElementById('lives-container');
+        livesContainer.innerHTML = '';
+        for (let i = 0; i < lives; i++) {
+          const life = document.createElement('div');
+          life.className = 'life';
+          livesContainer.appendChild(life);
+        }
+      }
+
+      function initializeGame() {
+        const gameContainer = document.getElementById('game-container');
+        gameContainer.innerHTML = '';
+        bombPositions = [];
+        revealedCount = 0;
+        cycleStars = 0;
+        gameActive = lives > 0;
+
+        if (!gameActive) {
+          gameContainer.innerHTML = '<p style="color: white; font-size: 1.5em;">You have no lives left. Please buy more lives to play.</p>';
+          document.getElementById('game-over').classList.add('show');
+          document.getElementById('game-over-title').textContent = 'No Lives Left! Buy More to Continue';
+          document.getElementById('play-again-btn').style.display = 'none';
+          document.getElementById('buy-lives-btn').style.display = 'block';
+          return;
+        }
+
+        while (bombPositions.length < 2) {
+          const randomPos = Math.floor(Math.random() * 9);
+          if (!bombPositions.includes(randomPos)) {
+            bombPositions.push(randomPos);
+          }
+        }
+
+        for (let i = 0; i < 9; i++) {
+          const box = document.createElement('div');
+          box.className = 'box';
+          box.dataset.index = i;
+          box.innerHTML = '<div class="flipper"><div class="front">?</div><div class="back"></div></div>';
+          box.addEventListener('click', handleBoxClick);
+          gameContainer.appendChild(box);
+        }
+      }
+
+      async function saveGameState() {
+        if (!contract) {
+          throw new Error("Wallet not connected");
+        }
+        const tx = await contract.endGame(stars, lives);
+        await tx.wait();
+        hasUnsavedChanges = false;
+      }
+
+      async function handleBoxClick(event) {
+        if (isProcessing) return;
+        if (lives === 0) {
+          alert("You have no lives left. Please buy more lives.");
+          return;
+        }
+        if (!gameActive) return;
+
+        if (stars < 1) {
+          if (lives > 0) {
+            alert("You need at least 1 star to click a box. You can sacrifice a life for 5 stars.");
+          } else {
+            alert("You have no stars and no lives. Please buy more lives.");
+          }
+          return;
+        }
+
+        const hasEnoughBalance = await checkBalance('play');
+        if (!hasEnoughBalance) return;
+
+        isProcessing = true;
+        document.getElementById('loading').classList.add('show');
+
+        stars -= 1;
+        updateStarsDisplay(stars);
+        hasUnsavedChanges = true;
+
+        const box = event.target.closest('.box');
+        const index = parseInt(box.dataset.index);
+
+        if (box.classList.contains('revealed')) {
+          isProcessing = false;
+          document.getElementById('loading').classList.remove('show');
+          return;
+        }
+
+        box.classList.add('revealed');
+        revealedCount++;
+
+        const back = box.querySelector('.back');
+        if (bombPositions.includes(index)) {
+          back.innerHTML = '<div class="bomb-content">💣</div>';
+          back.classList.add('bomb');
+          document.getElementById('bomb-sound').play();
+          lives -= 1;
+          renderLives();
+          stars -= cycleStars;
+          updateStarsDisplay(stars);
+          cycleStars = 0;
+
+          try {
+            await saveGameState();
+            if (lives === 0) {
+              showGameOver('no_lives');
+            } else {
+              setTimeout(() => {
+                initializeGame();
+              }, 1500);
+            }
+          } catch (error) {
+            console.error("Failed to save game state:", error);
+            alert("Failed to save game state. Your progress might not be saved. Please try again or cash out.");
+          } finally {
+            isProcessing = false;
+            document.getElementById('loading').classList.remove('show');
+          }
+        } else {
+          const rect = box.getBoundingClientRect();
+          const x = (rect.left + rect.width / 2) / window.innerWidth;
+          const y = (rect.top + rect.height / 2) / window.innerHeight;
+          const origin = { x, y };
+          createCelebration(origin);
+          const gainedStars = Math.floor(Math.random() * 10) + 1;
+          cycleStars += gainedStars;
+          stars += gainedStars;
+          updateStarsDisplay(stars);
+          back.innerHTML = `<div class="star-content">${gainedStars}</div>`;
+          back.classList.add('star');
+          document.getElementById('star-sound').play();
+
+          if (revealedCount === 7) {
+            const bonusStars = 10;
+            cycleStars += bonusStars;
+            stars += bonusStars;
+            updateStarsDisplay(stars);
+            initializeGame();
+          }
+          isProcessing = false;
+          document.getElementById('loading').classList.remove('show');
+        }
+      }
+
+      function showGameOver(reason) {
+        const gameOver = document.getElementById('game-over');
+        const title = document.getElementById('game-over-title');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const buyLivesBtn = document.getElementById('buy-lives-btn');
+
+        gameOver.classList.add('show');
+
+        if (reason === 'no_lives') {
+          title.textContent = 'No Lives Left! Buy More to Continue';
+          playAgainBtn.style.display = 'none';
+          buyLivesBtn.style.display = 'block';
+        } else if (reason === 'cashed_out') {
+          title.textContent = `Cashed Out with ${stars} stars!`;
+          playAgainBtn.style.display = 'block';
+          buyLivesBtn.style.display = 'none';
+        }
+      }
+
+      document.getElementById('sacrifice-btn').addEventListener('click', async () => {
+        if (isProcessing) return;
+        if (lives >= 1 && stars === 0) {
+          const hasEnoughBalance = await checkBalance('sacrifice a life');
+          if (!hasEnoughBalance) return;
+          isProcessing = true;
+          document.getElementById('loading').classList.add('show');
+          try {
+            const newStars = stars + 5;
+            const newLives = lives - 1;
+            const tx = await contract.endGame(newStars, newLives);
+            await tx.wait();
+            await loadUserData();
+            alert("Successfully sacrificed a life for 5 stars!");
+          } catch (error) {
+            console.error("Sacrifice Error:", error);
+            alert("Failed to sacrifice a life. Check the console for details.");
+          } finally {
+            isProcessing = false;
+            document.getElementById('loading').classList.remove('show');
+          }
+        } else if (lives < 1) {
+          alert("You have no lives left to sacrifice.");
+        } else {
+          alert("You can only sacrifice a life when you have 0 stars.");
+        }
+      });
+
+      document.getElementById('cash-out-btn').addEventListener('click', async () => {
+        if (gameActive && !isProcessing) {
+          const hasEnoughBalance = await checkBalance('cash out');
+          if (!hasEnoughBalance) return;
+          isProcessing = true;
+          document.getElementById('loading').classList.add('show');
+          try {
+            await saveGameState();
+            showGameOver('cashed_out');
+            createCelebration({ x: 0.5, y: 0.5 });
+          } catch (error) {
+            console.error("Cash Out Error:", error);
+            alert("Failed to cash out. Check the console for details.");
+          } finally {
+            isProcessing = false;
+            document.getElementById('loading').classList.remove('show');
+          }
+        }
+      });
+
+      document.getElementById('play-again-btn').addEventListener('click', () => {
+        document.getElementById('game-over').classList.remove('show');
+        if (lives > 0) {
+          initializeGame();
+        } else {
+          alert("You have no lives left. Please buy more lives.");
+        }
+      });
+
+      document.getElementById('buy-lives-btn').addEventListener('click', buyLives);
+
+      document.getElementById('start-game-btn').addEventListener('click', async () => {
+        const connected = await connectWallet();
+        if (connected) {
+          const hasEnoughBalance = await checkBalance('start');
+          if (!hasEnoughBalance) {
+            disconnectWallet();
+            return;
+          }
+          document.getElementById('rules-modal').style.display = 'none';
+          document.getElementById('game-interface').style.display = 'block';
+          await loadUserData();
+          initializeGame();
+        }
+      });
+
+      document.getElementById('wallet-info').addEventListener('click', disconnectWallet);
+
+      window.addEventListener('beforeunload', (event) => {
+        if (hasUnsavedChanges) {
+          event.preventDefault();
+          event.returnValue = "You have unsaved progress! Cash out to save your stars and lives.";
+        }
+      });
+    }
+  </script>
+</body>
+</html>
